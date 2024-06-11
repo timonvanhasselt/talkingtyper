@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keystroke to Speech</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #f0f0f0;
+  }
+  
+  .container {
+    width: 90%;
+    max-width: 900px;
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  }
+
+  h1 {
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+
+  textarea {
+    width: calc(100% - 20px); /* Neem de padding van de container in rekening */
+    height: 150px;
+    font-size: 16px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    resize: none;
+    margin-bottom: 20px;
+    box-sizing: border-box; /* Zorg ervoor dat de padding deel uitmaakt van de breedte */
+  }
+
+  label {
+    font-size: 16px;
+    margin-right: 10px;
+  }
+
+  select {
+    font-size: 16px;
+    padding: 8px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+  }
+
+  input[type="checkbox"] {
+    margin-right: 10px;
+  }
+
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Type hier uw tekst:</h1>
+  <textarea id="text-input"></textarea>
+  <div>
+    <input type="checkbox" id="special-keys-checkbox">
+    <label for="special-keys-checkbox">Spreek speciale toetsen uit</label>
+  </div>
+  <div>
+    <label for="voice-select">Kies een stem:</label>
+    <select id="voice-select">
+    </select>
+  </div>
+</div>
+<script>
+  const textInput = document.getElementById('text-input');
+  const specialKeysCheckbox = document.getElementById('special-keys-checkbox');
+  const voiceSelect = document.getElementById('voice-select');
+  let previousValue = textInput.value;
+  let currentLine = 0;
+  let cursorPosition = 0; // Track cursor position
+  let speaking = false;
+  let utterance;
+
+  // Fetch available voices and populate the dropdown
+  function populateVoiceList() {
+    const voices = speechSynthesis.getVoices();
+    voiceSelect.innerHTML = '';
+    voices.forEach(voice => {
+      const option = document.createElement('option');
+      option.textContent = voice.name;
+      option.setAttribute('value', voice.name);
+      voiceSelect.appendChild(option);
+    });
+
+    // Set default voice to "Xander"
+    voiceSelect.value = 'Xander';
+  }
+
+  // Initialize voices
+  populateVoiceList();
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = populateVoiceList;
+  }
+
+  textInput.addEventListener('input', function(event) {
+    const currentValue = textInput.value;
+    cursorPosition = textInput.selectionStart; // Update cursor position
+    if (!speaking && currentValue !== previousValue) {
+      const addedText = getAddedText(previousValue, currentValue);
+      speak(addedText);
+      previousValue = currentValue;
+    }
+  });
+
+  textInput.addEventListener('keydown', function(event) {
+    if (speaking) {
+      speechSynthesis.cancel();
+      speaking = false;
+    }
+    const key = event.key;
+    if (key === 'ArrowUp') {
+      cursorPosition = textInput.selectionStart; // Update cursor position
+      currentLine = getLineAtCursor(cursorPosition);
+      speakLine(currentLine - 1); // Reduce line numbering by 1
+    } else if (key === 'ArrowDown') {
+      cursorPosition = textInput.selectionStart; // Update cursor position
+      currentLine = getLineAtCursor(cursorPosition);
+      speakLine(currentLine + 1); // Increase line numbering by 1
+    } else {
+      if (specialKeysCheckbox.checked || !isSpecialKey(key)) {
+        speak(getKeyDescription(key));
+      }
+    }
+  });
+
+  function getAddedText(previousValue, currentValue) {
+    const minLength = Math.min(previousValue.length, currentValue.length);
+    for (let i = 0; i < minLength; i++) {
+      if (previousValue[i] !== currentValue[i]) {
+        return currentValue.substring(cursorPosition); // Use cursor position
+      }
+    }
+    return currentValue.substring(minLength);
+  }
+
+  function getKeyDescription(key) {
+    switch (key) {
+      case ' ':
+        return 'spatie';
+      case 'Enter':
+        return 'enter';
+      case 'Shift':
+        return 'shift';
+       case 'Tab':
+        return 'Tab';
+      case 'Control':
+        return 'control';
+      case 'Alt':
+        return 'alt';
+      case 'Meta':
+        return 'command';
+      default:
+        return '';
+    }
+  }
+
+  function isSpecialKey(key) {
+    return [' ', 'Enter', 'Shift', 'Control', 'Alt', 'Meta'].includes(key);
+  }
+
+  function getTotalLines() {
+    const lines = textInput.value.split('\n');
+    return lines.length;
+  }
+
+  function getLineAtCursor(cursorPosition) {
+    const textBeforeCursor = textInput.value.substring(0, cursorPosition);
+    const linesBeforeCursor = textBeforeCursor.split('\n');
+    return linesBeforeCursor.length - 1;
+  }
+
+  function speakLine(lineNumber) {
+    const lines = textInput.value.split('\n');
+    if (lineNumber >= 0 && lineNumber < lines.length) {
+      const line = lines[lineNumber];
+      speak(line);
+    }
+  }
+
+  function speak(text) {
+    if (text.trim() !== '') {
+      utterance = new SpeechSynthesisUtterance(text);
+      utterance.voice = speechSynthesis.getVoices().find(v => v.name === voiceSelect.value);
+      utterance.onstart = function(event) {
+        speaking = true;
+      };
+      utterance.onend = function(event) {
+        speaking = false;
+      };
+      speechSynthesis.speak(utterance);
+    }
+  }
+</script>
+</body>
+</html>
